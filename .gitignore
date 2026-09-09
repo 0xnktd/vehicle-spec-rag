@@ -9,5 +9,6 @@ wheels/
 # Virtual environments
 .venv
 
-# ingoreable files
-PLAN.md
+# Generated retrieval artifacts and model caches
+artifacts/
+*.ses

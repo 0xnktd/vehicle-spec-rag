@@ -11,6 +11,9 @@ from .sections import iter_contextual_pages
 from .tables import extract_specification_table_blocks
 
 
+PDF_PARSER_VERSION = "1.0.0"
+
+
 def _validate_pdf_path(pdf_path: str | Path) -> Path:
     path = Path(pdf_path)
 

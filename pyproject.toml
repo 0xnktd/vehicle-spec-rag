@@ -5,9 +5,13 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "fastembed>=0.8.0",
+    "langchain-core>=1.6.2",
+    "langchain-qdrant>=1.1.0",
     "pydantic>=2.13.5",
     "pymupdf>=1.28.2",
     "pytest>=9.1.1",
+    "qdrant-client>=1.19.0",
 ]
 
 [tool.pytest.ini_options]

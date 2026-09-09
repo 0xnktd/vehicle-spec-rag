@@ -1,5 +1,14 @@
 """Vehicle specification extraction pipeline."""
 
+from vehicle_specs.chunking import (
+    ChunkKind,
+    ChunkingConfig,
+    TextChunk,
+    count_tokens,
+    iter_chunks,
+    iter_pdf_chunks,
+    write_chunks_jsonl,
+)
 from vehicle_specs.pdf import (
     ContextualPageRecord,
     DocumentMetadata,
@@ -20,20 +29,27 @@ from vehicle_specs.pdf import (
 )
 
 __all__ = [
+    "ChunkKind",
+    "ChunkingConfig",
     "ContextualPageRecord",
     "DocumentMetadata",
     "PageRecord",
     "SectionContext",
     "TextBlock",
+    "TextChunk",
     "clean_block_text",
     "clean_page_record",
+    "count_tokens",
     "detect_section_context",
     "extract_clean_page",
     "extract_page",
     "extract_specification_table_blocks",
     "iter_clean_page_records",
+    "iter_chunks",
     "iter_contextual_page_records",
     "iter_contextual_pages",
     "iter_page_records",
+    "iter_pdf_chunks",
     "read_document_metadata",
+    "write_chunks_jsonl",
 ]

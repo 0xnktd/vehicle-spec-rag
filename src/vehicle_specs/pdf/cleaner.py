@@ -6,6 +6,8 @@ from collections.abc import Iterable
 from .models import PageRecord, TextBlock
 
 
+PDF_CLEANER_VERSION = "1.0.0"
+
 _MANUAL_TITLE = "2014 F-150 Workshop Manual"
 _PAGE_LABEL_RE = re.compile(r"Page\s+\d+\s+sur\s+\d+", re.IGNORECASE)
 _ISO_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
