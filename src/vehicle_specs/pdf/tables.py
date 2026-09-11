@@ -8,6 +8,7 @@ import pymupdf
 from .cleaner import clean_block_text
 from .models import TextBlock
 
+pymupdf.no_recommend_layout()  # type: ignore[no-untyped-call]
 
 _STRONG_HEADER_RE = re.compile(
     r"(?:"
@@ -59,9 +60,9 @@ def _has_high_confidence_header(rows: tuple[tuple[str, ...], ...]) -> bool:
     if len(nonempty_header_cells) < 2:
         return False
 
-    return any(_STRONG_HEADER_RE.fullmatch(cell) for cell in nonempty_header_cells) or any(
-        _TORQUE_UNIT_RE.fullmatch(cell) for cell in nonempty_header_cells
-    )
+    return any(
+        _STRONG_HEADER_RE.fullmatch(cell) for cell in nonempty_header_cells
+    ) or any(_TORQUE_UNIT_RE.fullmatch(cell) for cell in nonempty_header_cells)
 
 
 def _escape_markdown_cell(cell: str) -> str:
@@ -69,7 +70,9 @@ def _escape_markdown_cell(cell: str) -> str:
 
 
 def _to_markdown(rows: tuple[tuple[str, ...], ...]) -> str:
-    header = tuple(cell or f"Column {index}" for index, cell in enumerate(rows[0], start=1))
+    header = tuple(
+        cell or f"Column {index}" for index, cell in enumerate(rows[0], start=1)
+    )
     lines = [
         f"| {' | '.join(_escape_markdown_cell(cell) for cell in header)} |",
         f"| {' | '.join('---' for _ in header)} |",
@@ -93,7 +96,7 @@ def extract_specification_table_blocks(
     from damaging identifiers or associating values with the wrong columns.
     """
     if page_text is None:
-        page_text = page.get_text("text")
+        page_text = page.get_text("text")  # type: ignore[no-untyped-call]
 
     normalized_page_text = " ".join(page_text.split())
     if not _TABLE_PAGE_HINT_RE.search(normalized_page_text):
@@ -101,7 +104,7 @@ def extract_specification_table_blocks(
 
     table_blocks: list[TextBlock] = []
 
-    for table in page.find_tables().tables:
+    for table in page.find_tables().tables:  # type: ignore[no-untyped-call]
         rows = _normalize_rows(table.extract(), table.col_count)
         if not _has_high_confidence_header(rows):
             continue

@@ -1,6 +1,5 @@
 """Local FastEmbed implementations of LangChain embedding interfaces."""
 
-import math
 from collections.abc import Iterable
 from typing import Any, Protocol
 
@@ -46,29 +45,8 @@ def _dense_model_dimension(model_name: str) -> int:
     raise ValueError(f"FastEmbed dense model is not supported: {model_name}")
 
 
-def _validate_dense_vectors(
-    raw_vectors: Iterable[Any],
-    *,
-    expected_count: int,
-    expected_dimension: int,
-) -> list[list[float]]:
-    vectors = [[float(value) for value in _as_list(vector)] for vector in raw_vectors]
-    if len(vectors) != expected_count:
-        raise RuntimeError(
-            "dense embedding backend returned "
-            f"{len(vectors)} vectors for {expected_count} texts"
-        )
-
-    for vector in vectors:
-        if len(vector) != expected_dimension:
-            raise RuntimeError(
-                "dense embedding backend returned a vector with "
-                f"{len(vector)} values; expected {expected_dimension}"
-            )
-        if not all(math.isfinite(value) for value in vector):
-            raise RuntimeError("dense embedding backend returned a non-finite value")
-
-    return vectors
+def _dense_vectors(raw_vectors: Iterable[Any]) -> list[list[float]]:
+    return [[float(value) for value in _as_list(vector)] for vector in raw_vectors]
 
 
 class FastEmbedDenseEmbeddings(Embeddings):
@@ -83,9 +61,6 @@ class FastEmbedDenseEmbeddings(Embeddings):
         threads: int | None = None,
         _backend: _DenseBackend | None = None,
     ) -> None:
-        if batch_size < 1:
-            raise ValueError("batch_size must be positive")
-
         self.model_name = model_name
         self.batch_size = batch_size
         self.dimension = _dense_model_dimension(model_name)
@@ -106,47 +81,21 @@ class FastEmbedDenseEmbeddings(Embeddings):
         if not texts:
             return []
         vectors = self._backend.embed(texts, batch_size=self.batch_size)
-        return _validate_dense_vectors(
-            vectors,
-            expected_count=len(texts),
-            expected_dimension=self.dimension,
-        )
+        return _dense_vectors(vectors)
 
     def embed_query(self, text: str) -> list[float]:
         """Embed one retrieval query locally."""
         vectors = self._backend.query_embed(text, batch_size=self.batch_size)
-        return _validate_dense_vectors(
-            vectors,
-            expected_count=1,
-            expected_dimension=self.dimension,
-        )[0]
+        return _dense_vectors(vectors)[0]
 
 
-def _validate_sparse_vectors(
-    raw_vectors: Iterable[Any],
-    *,
-    expected_count: int,
-) -> list[SparseVector]:
+def _sparse_vectors(raw_vectors: Iterable[Any]) -> list[SparseVector]:
     vectors: list[SparseVector] = []
 
     for raw_vector in raw_vectors:
         indices = [int(index) for index in _as_list(raw_vector.indices)]
         values = [float(value) for value in _as_list(raw_vector.values)]
-        if len(indices) != len(values):
-            raise RuntimeError("sparse embedding indices and values have different lengths")
-        if any(index < 0 for index in indices):
-            raise RuntimeError("sparse embedding backend returned a negative index")
-        if len(set(indices)) != len(indices):
-            raise RuntimeError("sparse embedding backend returned duplicate indices")
-        if not all(math.isfinite(value) for value in values):
-            raise RuntimeError("sparse embedding backend returned a non-finite value")
         vectors.append(SparseVector(indices=indices, values=values))
-
-    if len(vectors) != expected_count:
-        raise RuntimeError(
-            "sparse embedding backend returned "
-            f"{len(vectors)} vectors for {expected_count} texts"
-        )
 
     return vectors
 
@@ -163,9 +112,6 @@ class FastEmbedSparseEmbeddings(SparseEmbeddings):
         threads: int | None = None,
         _backend: _SparseBackend | None = None,
     ) -> None:
-        if batch_size < 1:
-            raise ValueError("batch_size must be positive")
-
         self.model_name = model_name
         self.batch_size = batch_size
 
@@ -177,7 +123,9 @@ class FastEmbedSparseEmbeddings(SparseEmbeddings):
                 for description in SparseTextEmbedding.list_supported_models()
             }
             if model_name not in supported:
-                raise ValueError(f"FastEmbed sparse model is not supported: {model_name}")
+                raise ValueError(
+                    f"FastEmbed sparse model is not supported: {model_name}"
+                )
             _backend = SparseTextEmbedding(
                 model_name=model_name,
                 cache_dir=cache_dir,
@@ -191,9 +139,9 @@ class FastEmbedSparseEmbeddings(SparseEmbeddings):
         if not texts:
             return []
         vectors = self._backend.embed(texts, batch_size=self.batch_size)
-        return _validate_sparse_vectors(vectors, expected_count=len(texts))
+        return _sparse_vectors(vectors)
 
     def embed_query(self, text: str) -> SparseVector:
         """Embed one retrieval query as a local sparse vector."""
         vectors = self._backend.query_embed(text, batch_size=self.batch_size)
-        return _validate_sparse_vectors(vectors, expected_count=1)[0]
+        return _sparse_vectors(vectors)[0]

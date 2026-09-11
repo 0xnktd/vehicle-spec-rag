@@ -1,19 +1,56 @@
 [project]
-name = "assignment"
+name = "vehicle-spec-extraction"
 version = "0.1.0"
-description = "Add your description here"
+description = "Evidence-backed vehicle specification extraction from service manuals"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
     "fastembed>=0.8.0",
     "langchain-core>=1.6.2",
+    "langchain-openai>=1.1.0",
     "langchain-qdrant>=1.1.0",
     "pydantic>=2.13.5",
+    "pydantic-settings>=2.15.0",
     "pymupdf>=1.28.2",
-    "pytest>=9.1.1",
     "qdrant-client>=1.19.0",
+    "streamlit>=1.63.0,<2",
+    "typer>=0.27.2",
 ]
 
+[project.scripts]
+vehicle-specs = "vehicle_specs.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/vehicle_specs"]
+
 [tool.pytest.ini_options]
+addopts = "-ra --strict-config --strict-markers"
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["B", "BLE", "E", "F", "I", "RUF", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+mypy_path = "src"
+packages = ["vehicle_specs"]
+strict = true
+warn_unreachable = true
+
+[dependency-groups]
+dev = [
+    "mypy>=2.3.1",
+    # NumPy 2.5 stubs use syntax newer than mypy's Python 3.11 target.
+    "numpy<2.5",
+    "pytest>=9.1.1",
+    "ruff>=0.16.6",
+]

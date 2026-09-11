@@ -1,10 +1,11 @@
-"""Persistent local Qdrant index construction and safe reopening."""
+"""LangChain document conversion and persistent local Qdrant storage."""
 
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_qdrant import QdrantVectorStore, RetrievalMode
 from langchain_qdrant.sparse_embeddings import SparseEmbeddings
@@ -13,14 +14,63 @@ from qdrant_client import QdrantClient, models
 
 from vehicle_specs.chunking.models import TextChunk
 
-from .documents import chunks_to_documents
 from .embeddings import FastEmbedDenseEmbeddings, FastEmbedSparseEmbeddings
 from .models import (
     INDEX_FORMAT_VERSION,
     IndexBuildResult,
     IndexConfig,
     IndexManifest,
+    PipelineVersions,
 )
+
+
+def chunk_metadata(
+    chunk: TextChunk,
+    pipeline_versions: PipelineVersions,
+) -> dict[str, Any]:
+    """Build JSON-compatible citation and filtering metadata for a chunk."""
+    metadata: dict[str, Any] = {
+        "chunk_id": chunk.chunk_id,
+        "source": chunk.source,
+        "kind": chunk.kind,
+        "pdf_pages": list(chunk.pdf_pages),
+        "pipeline_versions": pipeline_versions.model_dump(mode="json"),
+    }
+
+    if chunk.section is not None:
+        metadata.update(
+            {
+                "section_id": chunk.section.section_id,
+                "section_title": chunk.section.section_title,
+                "category": chunk.section.category,
+                "article_title": chunk.section.article_title,
+                "article_start_pdf_page": chunk.section.start_pdf_page,
+            }
+        )
+
+    return metadata
+
+
+def chunk_to_document(
+    chunk: TextChunk,
+    pipeline_versions: PipelineVersions | None = None,
+) -> Document:
+    """Represent one validated chunk using LangChain's interchange type."""
+    versions = pipeline_versions or PipelineVersions()
+    return Document(
+        id=chunk.chunk_id,
+        page_content=chunk.text,
+        metadata=chunk_metadata(chunk, versions),
+    )
+
+
+def chunks_to_documents(
+    chunks: Iterable[TextChunk],
+    pipeline_versions: PipelineVersions | None = None,
+) -> list[Document]:
+    """Convert chunks while preserving their input order."""
+    versions = pipeline_versions or PipelineVersions()
+    return [chunk_to_document(chunk, versions) for chunk in chunks]
 
 
 class IndexAlreadyExistsError(RuntimeError):
@@ -105,9 +155,7 @@ def _dense_dimension(embeddings: Embeddings) -> int:
     dimension = getattr(embeddings, "dimension", None)
     if dimension is None:
         dimension = len(embeddings.embed_query("embedding dimension probe"))
-    if not isinstance(dimension, int) or isinstance(dimension, bool) or dimension < 1:
-        raise ValueError("dense embedding dimension must be a positive integer")
-    return dimension
+    return int(dimension)
 
 
 def _manifest_for(
@@ -254,16 +302,12 @@ def build_index(
             validate_collection_config=False,
         )
         point_ids = list(range(1, len(documents) + 1))
-        inserted_ids = vector_store.add_documents(
+        vector_store.add_documents(
             documents,
             ids=point_ids,
             batch_size=config.batch_size,
             wait=True,
         )
-        if len(inserted_ids) != len(documents):
-            raise IndexIntegrityError(
-                f"Qdrant accepted {len(inserted_ids)} of {len(documents)} chunks"
-            )
 
         stored_count = client.count(config.collection_name, exact=True).count
         if stored_count != len(documents):

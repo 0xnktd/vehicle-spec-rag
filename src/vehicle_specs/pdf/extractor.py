@@ -1,17 +1,41 @@
-"""Open PDF documents and stream raw or normalized page records."""
+"""Extract cleaned PDF pages and propagate their service-manual context."""
 
-from collections.abc import Iterator
+import re
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 
 import pymupdf
 
 from .cleaner import clean_page_record
-from .models import ContextualPageRecord, DocumentMetadata, PageRecord, TextBlock
-from .sections import iter_contextual_pages
+from .models import ContextualPageRecord, PageRecord, SectionContext, TextBlock
 from .tables import extract_specification_table_blocks
 
-
 PDF_PARSER_VERSION = "1.0.0"
+
+_SECTION_HEADING_RE = re.compile(
+    r"SECTION\s+(?P<section_id>\d{3}-\d{2}[A-Z]?):\s*(?P<section_title>.+)"
+)
+_CATEGORY_RE = re.compile(r"[A-Z][A-Z0-9 &/()—-]*")
+_NUMBERED_ITEM_RE = re.compile(r"\d+[.)](?:\s|$)")
+_GENERIC_SUBHEADINGS = frozenset(
+    {
+        "General Specifications",
+        "Installation",
+        "Material",
+        "Removal",
+        "Removal and Installation",
+        "Special Tool(s)",
+        "Torque Specifications",
+    }
+)
+_NON_TITLE_PREFIXES = (
+    "- ",
+    "| ",
+    "CAUTION:",
+    "NOTE:",
+    "NOTICE:",
+    "WARNING:",
+)
 
 
 def _validate_pdf_path(pdf_path: str | Path) -> Path:
@@ -34,23 +58,13 @@ def _validate_document(document: pymupdf.Document, path: Path) -> None:
         raise ValueError(f"PDF contains no pages: {path}")
 
 
-def read_document_metadata(pdf_path: str | Path) -> DocumentMetadata:
-    """Read the minimal metadata needed by the extraction pipeline."""
-    path = _validate_pdf_path(pdf_path)
-
-    with pymupdf.open(path) as document:
-        _validate_document(document, path)
-        return DocumentMetadata(
-            filename=path.name,
-            page_count=document.page_count,
-        )
-
-
 def extract_page(page: pymupdf.Page) -> PageRecord:
     """Extract ordered text blocks and their coordinates from one PDF page."""
     text_blocks: list[TextBlock] = []
 
-    for block in page.get_text("blocks", sort=True):
+    for block in page.get_text(  # type: ignore[no-untyped-call]
+        "blocks", sort=True
+    ):
         x0, y0, x1, y1, text, _, block_type = block
 
         if block_type != 0 or not text.strip():
@@ -79,28 +93,97 @@ def extract_clean_page(page: pymupdf.Page) -> PageRecord:
     return clean_page_record(raw_page, table_blocks)
 
 
-def iter_page_records(pdf_path: str | Path) -> Iterator[PageRecord]:
-    """Yield page records in PDF order without retaining the entire document."""
-    path = _validate_pdf_path(pdf_path)
-
-    with pymupdf.open(path) as document:
-        _validate_document(document, path)
-
-        for page in document:
-            yield extract_page(page)
-
-
 def iter_clean_page_records(pdf_path: str | Path) -> Iterator[PageRecord]:
     """Yield cleaned, table-aware page records in PDF order."""
     path = _validate_pdf_path(pdf_path)
 
-    with pymupdf.open(path) as document:
+    with pymupdf.open(path) as document:  # type: ignore[no-untyped-call]
         _validate_document(document, path)
 
         for page in document:
             yield extract_clean_page(page)
 
 
-def iter_contextual_page_records(pdf_path: str | Path) -> Iterator[ContextualPageRecord]:
-    """Yield cleaned pages with article context propagated across page boundaries."""
-    yield from iter_contextual_pages(iter_clean_page_records(pdf_path))
+def _parse_header_block(block: TextBlock) -> tuple[str, str, str] | None:
+    lines = tuple(line.strip() for line in block.text.splitlines() if line.strip())
+    if len(lines) < 2:
+        return None
+
+    category = lines[-1]
+    if not _CATEGORY_RE.fullmatch(category):
+        return None
+
+    heading = " ".join(lines[:-1])
+    match = _SECTION_HEADING_RE.fullmatch(heading)
+    if not match:
+        return None
+
+    return match.group("section_id"), match.group("section_title"), category
+
+
+def _is_article_title_candidate(text: str) -> bool:
+    return (
+        bool(text)
+        and "\n" not in text
+        and len(text) <= 240
+        and text not in _GENERIC_SUBHEADINGS
+        and not text.startswith(_NON_TITLE_PREFIXES)
+        and not _NUMBERED_ITEM_RE.match(text)
+        and not text.endswith((".", ";", "?", "!"))
+    )
+
+
+def _find_article_title(
+    blocks: tuple[TextBlock, ...],
+    header_index: int,
+    category: str,
+) -> str | None:
+    if category == "SPECIFICATIONS" or header_index + 1 >= len(blocks):
+        return None
+
+    header = blocks[header_index]
+    candidate = blocks[header_index + 1]
+    vertical_gap = candidate.bbox[1] - header.bbox[3]
+
+    if vertical_gap > 80 or not _is_article_title_candidate(candidate.text):
+        return None
+
+    return candidate.text
+
+
+def detect_section_context(page: PageRecord) -> SectionContext | None:
+    """Return new article context when a cleaned page contains its header."""
+    for index, block in enumerate(page.blocks):
+        parsed_header = _parse_header_block(block)
+        if not parsed_header:
+            continue
+
+        section_id, section_title, category = parsed_header
+        return SectionContext(
+            section_id=section_id,
+            section_title=section_title,
+            category=category,
+            article_title=_find_article_title(page.blocks, index, category),
+            start_pdf_page=page.pdf_page,
+        )
+
+    return None
+
+
+def iter_contextual_pages(
+    pages: Iterable[PageRecord],
+) -> Iterator[ContextualPageRecord]:
+    """Attach the latest article context to monotonically ordered pages."""
+    current_context: SectionContext | None = None
+    previous_pdf_page: int | None = None
+
+    for page in pages:
+        if previous_pdf_page is not None and page.pdf_page <= previous_pdf_page:
+            raise ValueError("pages must be ordered by increasing PDF page number")
+
+        detected_context = detect_section_context(page)
+        if detected_context:
+            current_context = detected_context
+
+        yield ContextualPageRecord(page=page, section=current_context)
+        previous_pdf_page = page.pdf_page

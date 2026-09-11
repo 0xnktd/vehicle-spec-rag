@@ -1,0 +1,119 @@
+name: vehicle-specs
+
+services:
+  vllm:
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.29.0}
+    init: true
+    ipc: host
+    gpus: all
+    ports:
+      - "127.0.0.1:${VLLM_PORT:-8000}:8000"
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
+      HF_HOME: /root/.cache/huggingface
+    volumes:
+      - huggingface-cache:/root/.cache/huggingface
+      - vllm-cache:/root/.cache/vllm
+    command:
+      - ${VLLM_MODEL:-RedHatAI/Qwen3.5-4B-quantized.w4a16}
+      - --served-model-name
+      - ${VLLM_MODEL:-RedHatAI/Qwen3.5-4B-quantized.w4a16}
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --max-model-len
+      - ${VLLM_MAX_MODEL_LEN:-8192}
+      - --max-num-seqs
+      - "1"
+      - --gpu-memory-utilization
+      - ${VLLM_GPU_MEMORY_UTILIZATION:-0.90}
+      - --language-model-only
+      - --reasoning-parser
+      - qwen3
+      - --default-chat-template-kwargs
+      - '{"enable_thinking": false}'
+      - --generation-config
+      - vllm
+      - --enforce-eager
+      - --api-key
+      - ${VLLM_API_KEY:-local-vllm}
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 20m
+    restart: unless-stopped
+    stop_grace_period: 2m
+    logging:
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  app:
+    profiles: [cli]
+    build:
+      context: .
+    init: true
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    environment:
+      VEHICLE_SPECS_LLM_MODEL: ${VLLM_MODEL:-RedHatAI/Qwen3.5-4B-quantized.w4a16}
+      VEHICLE_SPECS_LLM_BASE_URL: http://vllm:8000/v1
+      VEHICLE_SPECS_LLM_API_KEY: ${VLLM_API_KEY:-local-vllm}
+      VEHICLE_SPECS_MODEL_CACHE_PATH: /app/artifacts/models
+    volumes:
+      - ./docs:/app/docs:ro
+      - ./artifacts:/app/artifacts
+    command: [--help]
+
+  ui:
+    build:
+      context: .
+    init: true
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    depends_on:
+      vllm:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${UI_PORT:-8501}:8501"
+    environment:
+      VEHICLE_SPECS_LLM_MODEL: ${VLLM_MODEL:-RedHatAI/Qwen3.5-4B-quantized.w4a16}
+      VEHICLE_SPECS_LLM_BASE_URL: http://vllm:8000/v1
+      VEHICLE_SPECS_LLM_API_KEY: ${VLLM_API_KEY:-local-vllm}
+      VEHICLE_SPECS_MODEL_CACHE_PATH: /app/artifacts/models
+    volumes:
+      - ./docs:/app/docs:ro
+      - ./artifacts:/app/artifacts
+    entrypoint: [streamlit, run]
+    command:
+      - /app/streamlit_app.py
+      - --server.address=0.0.0.0
+      - --server.port=8501
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=5)
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    restart: unless-stopped
+    logging:
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  huggingface-cache:
+  vllm-cache:

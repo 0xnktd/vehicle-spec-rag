@@ -4,10 +4,12 @@ import pymupdf
 import pytest
 
 from vehicle_specs.pdf.cleaner import clean_page_record
-from vehicle_specs.pdf.extractor import extract_page
+from vehicle_specs.pdf.extractor import (
+    detect_section_context,
+    extract_page,
+    iter_contextual_pages,
+)
 from vehicle_specs.pdf.models import PageRecord, SectionContext, TextBlock
-from vehicle_specs.pdf.sections import detect_section_context, iter_contextual_pages
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SAMPLE_MANUAL = PROJECT_ROOT / "docs" / "sample-service-manual 1.pdf"
@@ -101,10 +103,7 @@ def test_rejects_out_of_order_pages() -> None:
 
 def test_detects_every_article_boundary_in_the_manual() -> None:
     with pymupdf.open(SAMPLE_MANUAL) as document:
-        cleaned_pages = (
-            clean_page_record(extract_page(page))
-            for page in document
-        )
+        cleaned_pages = (clean_page_record(extract_page(page)) for page in document)
         contextual_pages = tuple(iter_contextual_pages(cleaned_pages))
 
     assert len(contextual_pages) == 852

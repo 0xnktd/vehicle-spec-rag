@@ -8,7 +8,14 @@ wheels/
 
 # Virtual environments
 .venv
+.env
+.env.*
+!.env.example
 
 # Generated retrieval artifacts and model caches
 artifacts/
+.tools/
 *.ses
+
+# Supplied assignment inputs are kept locally, not packaged in the repository
+docs/*.pdf

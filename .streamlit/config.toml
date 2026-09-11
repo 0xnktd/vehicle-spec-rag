@@ -1,0 +1,22 @@
+[server]
+headless = true
+runOnSave = false
+fileWatcherType = "none"
+
+[browser]
+gatherUsageStats = false
+
+[client]
+showErrorDetails = "none"
+toolbarMode = "minimal"
+
+[theme]
+base = "light"
+primaryColor = "#1D4ED8"
+backgroundColor = "#F8FAFC"
+secondaryBackgroundColor = "#EEF2F7"
+textColor = "#172033"
+borderColor = "#CBD5E1"
+baseRadius = "small"
+buttonRadius = "small"
+showWidgetBorder = true

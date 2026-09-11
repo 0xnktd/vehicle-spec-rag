@@ -1,6 +1,11 @@
 """Local dense/sparse embeddings and persistent Qdrant indexing."""
 
-from .documents import chunk_metadata, chunk_to_document, chunks_to_documents
+import os
+
+# FastEmbed runs locally; disable ONNX Runtime's optional outbound telemetry before
+# importing Qdrant/FastEmbed integration modules.
+os.environ.setdefault("ORT_DISABLE_TELEMETRY", "1")
+
 from .embeddings import FastEmbedDenseEmbeddings, FastEmbedSparseEmbeddings
 from .models import (
     DEFAULT_DENSE_MODEL,
@@ -18,6 +23,9 @@ from .store import (
     IndexIntegrityError,
     IndexNotFoundError,
     build_index,
+    chunk_metadata,
+    chunk_to_document,
+    chunks_to_documents,
     open_index,
     read_index_manifest,
 )

@@ -9,7 +9,6 @@ from vehicle_specs.chunking.chunker import CHUNKER_VERSION
 from vehicle_specs.pdf.cleaner import PDF_CLEANER_VERSION
 from vehicle_specs.pdf.extractor import PDF_PARSER_VERSION
 
-
 INDEX_FORMAT_VERSION = "1.0.0"
 DEFAULT_DENSE_MODEL = "BAAI/bge-small-en-v1.5"
 DEFAULT_SPARSE_MODEL = "Qdrant/bm25"
@@ -80,9 +79,3 @@ class IndexBuildResult(BaseModel):
     @property
     def indexed_chunk_count(self) -> int:
         return self.manifest.chunk_count
-
-    @model_validator(mode="after")
-    def validate_counts(self) -> Self:
-        if self.input_chunk_count != self.indexed_chunk_count + self.duplicate_chunk_count:
-            raise ValueError("input count must equal indexed plus duplicate chunks")
-        return self

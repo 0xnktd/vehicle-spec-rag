@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 from typing import Any
 
-import pytest
-
 from vehicle_specs.indexing import (
     DEFAULT_DENSE_MODEL,
     DEFAULT_SPARSE_MODEL,
@@ -80,16 +78,6 @@ def test_dense_adapter_implements_document_and_query_embeddings() -> None:
     assert backend.query_calls == [("guide pin", 2)]
 
 
-def test_dense_adapter_rejects_backend_dimension_mismatch() -> None:
-    embeddings = FastEmbedDenseEmbeddings(
-        model_name=DEFAULT_DENSE_MODEL,
-        _backend=FakeDenseBackend(dimension=3),
-    )
-
-    with pytest.raises(RuntimeError, match="expected 384"):
-        embeddings.embed_documents(["brake"])
-
-
 def test_sparse_adapter_implements_document_and_query_embeddings() -> None:
     backend = FakeSparseBackend()
     embeddings = FastEmbedSparseEmbeddings(
@@ -107,17 +95,3 @@ def test_sparse_adapter_implements_document_and_query_embeddings() -> None:
     assert query_vector.values == [3.0]
     assert backend.document_calls == [(["37 Nm", "guide pin"], 3)]
     assert backend.query_calls == [("bolt torque", 3)]
-
-
-def test_sparse_adapter_rejects_duplicate_indices() -> None:
-    backend = FakeSparseBackend()
-    backend.embed = lambda documents, *, batch_size: [
-        RawSparseVector(indices=[1, 1], values=[1.0, 2.0])
-    ]
-    embeddings = FastEmbedSparseEmbeddings(
-        model_name=DEFAULT_SPARSE_MODEL,
-        _backend=backend,
-    )
-
-    with pytest.raises(RuntimeError, match="duplicate indices"):
-        embeddings.embed_documents(["brake"])

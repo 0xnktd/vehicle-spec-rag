@@ -1,15 +1,15 @@
-"""Section-aware chunking that preserves specification tables."""
+"""Section-aware chunking and atomic chunk persistence."""
 
+import os
 import re
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
-from vehicle_specs.pdf.extractor import iter_contextual_page_records
 from vehicle_specs.pdf.models import ContextualPageRecord, SectionContext
 
-from .models import ChunkKind, ChunkingConfig, TextChunk
-
+from .models import ChunkingConfig, ChunkKind, TextChunk
 
 CHUNKER_VERSION = "1.0.0"
 
@@ -307,7 +307,11 @@ def _article_drafts(
             yield _DraftChunk(kind="table", blocks=tuple(table_blocks))
             continue
 
-        if block.starts_section and prose and any(not item.is_heading for item in prose):
+        if (
+            block.starts_section
+            and prose
+            and any(not item.is_heading for item in prose)
+        ):
             yield from flush_prose()
 
         prose.append(block)
@@ -374,13 +378,8 @@ def iter_chunks(
     config = config or ChunkingConfig()
     article_pages: list[ContextualPageRecord] = []
     current_context: SectionContext | None = None
-    previous_pdf_page: int | None = None
 
     for record in pages:
-        pdf_page = record.page.pdf_page
-        if previous_pdf_page is not None and pdf_page <= previous_pdf_page:
-            raise ValueError("pages must be ordered by increasing PDF page number")
-
         if article_pages and record.section != current_context:
             yield from _build_article_chunks(article_pages, source, config)
             article_pages = []
@@ -389,21 +388,39 @@ def iter_chunks(
             current_context = record.section
 
         article_pages.append(record)
-        previous_pdf_page = pdf_page
 
     if article_pages:
         yield from _build_article_chunks(article_pages, source, config)
 
 
-def iter_pdf_chunks(
-    pdf_path: str | Path,
-    *,
-    config: ChunkingConfig | None = None,
-) -> Iterator[TextChunk]:
-    """Run PDF extraction, cleanup, context propagation, and chunking."""
-    path = Path(pdf_path)
-    yield from iter_chunks(
-        iter_contextual_page_records(path),
-        source=path.name,
-        config=config,
-    )
+def write_chunks_jsonl(
+    chunks: Iterable[TextChunk],
+    output_path: str | Path,
+) -> int:
+    """Atomically write chunks as UTF-8 JSON Lines and return the count."""
+    path = Path(output_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path: Path | None = None
+
+    try:
+        with NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary_file:
+            temporary_path = Path(temporary_file.name)
+            count = 0
+            for chunk in chunks:
+                temporary_file.write(chunk.model_dump_json())
+                temporary_file.write("\n")
+                count += 1
+
+        os.replace(temporary_path, path)
+        return count
+    except Exception:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+        raise

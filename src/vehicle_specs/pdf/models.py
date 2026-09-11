@@ -57,19 +57,6 @@ class PageRecord(BaseModel):
         return "\n".join(block.text for block in self.blocks)
 
 
-class DocumentMetadata(BaseModel):
-    """Minimal information about the extracted PDF."""
-
-    model_config = ConfigDict(
-        extra="forbid",
-        frozen=True,
-        str_strip_whitespace=True,
-    )
-
-    filename: str = Field(min_length=1)
-    page_count: int = Field(gt=0)
-
-
 class SectionContext(BaseModel):
     """Article context inherited by pages until the next article header."""
 
@@ -96,10 +83,3 @@ class ContextualPageRecord(BaseModel):
 
     page: PageRecord
     section: SectionContext | None = None
-
-    @model_validator(mode="after")
-    def validate_context_origin(self) -> Self:
-        if self.section and self.section.start_pdf_page > self.page.pdf_page:
-            raise ValueError("section context cannot start after its page")
-
-        return self

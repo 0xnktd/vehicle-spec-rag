@@ -1,0 +1,35 @@
+{
+  "run_date": "2026-09-10",
+  "command": "vehicle-specs evaluate --rerank --with-llm",
+  "manual_pages": 852,
+  "indexed_chunks": 637,
+  "gpu_profile": "NVIDIA RTX 4060, 8 GB",
+  "vllm_image": "vllm/vllm-openai:v0.29.0",
+  "model": "RedHatAI/Qwen3.5-4B-quantized.w4a16",
+  "max_model_len": 8192,
+  "max_num_seqs": 1,
+  "prompt_version": "1.4.0",
+  "pipeline_version": "1.5.0",
+  "retrieval": {
+    "evaluated_queries": 29,
+    "recall_at_5": 1.0,
+    "recall_at_10": 1.0,
+    "mean_reciprocal_rank": 0.9310344827586207
+  },
+  "extraction": {
+    "evaluated_queries": 30,
+    "expected_result_count": 34,
+    "returned_result_count": 34,
+    "status_accuracy": 1.0,
+    "ambiguity_accuracy": 1.0,
+    "abstention_accuracy": 1.0,
+    "component_accuracy": 1.0,
+    "value_accuracy": 1.0,
+    "unit_accuracy": 1.0,
+    "citation_accuracy": 1.0,
+    "result_precision": 1.0,
+    "exact_result_accuracy": 1.0,
+    "exact_response_accuracy": 1.0
+  },
+  "failures": 0
+}

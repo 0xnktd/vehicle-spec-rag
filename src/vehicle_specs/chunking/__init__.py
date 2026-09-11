@@ -1,16 +1,14 @@
 """Structure-aware chunking and chunk persistence."""
 
-from .chunker import CHUNKER_VERSION, count_tokens, iter_chunks, iter_pdf_chunks
-from .io import write_chunks_jsonl
-from .models import ChunkKind, ChunkingConfig, TextChunk
+from .chunker import CHUNKER_VERSION, count_tokens, iter_chunks, write_chunks_jsonl
+from .models import ChunkingConfig, ChunkKind, TextChunk
 
 __all__ = [
-    "ChunkKind",
     "CHUNKER_VERSION",
+    "ChunkKind",
     "ChunkingConfig",
     "TextChunk",
     "count_tokens",
     "iter_chunks",
-    "iter_pdf_chunks",
     "write_chunks_jsonl",
 ]

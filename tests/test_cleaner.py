@@ -16,11 +16,7 @@ def make_page(*blocks: TextBlock) -> PageRecord:
     "boilerplate",
     (
         "Page 1 sur 2\n2014 F-150 Workshop Manual\n",
-        (
-            "2014-03-01\n"
-            "file:///C:/TSO/cache/manual.HTM\n"
-            "repair4less\n"
-        ),
+        ("2014-03-01\nfile:///C:/TSO/cache/manual.HTM\nrepair4less\n"),
     ),
 )
 def test_removes_only_recognized_header_and_footer_blocks(boilerplate: str) -> None:

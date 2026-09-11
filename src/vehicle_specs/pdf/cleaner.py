@@ -5,7 +5,6 @@ from collections.abc import Iterable
 
 from .models import PageRecord, TextBlock
 
-
 PDF_CLEANER_VERSION = "1.0.0"
 
 _MANUAL_TITLE = "2014 F-150 Workshop Manual"
@@ -33,18 +32,26 @@ def _classification_lines(text: str) -> tuple[str, ...]:
 
 def _is_recurring_header(text: str) -> bool:
     lines = _classification_lines(text)
-    return bool(lines) and any(_PAGE_LABEL_RE.fullmatch(line) for line in lines) and all(
-        _PAGE_LABEL_RE.fullmatch(line) or line == _MANUAL_TITLE for line in lines
+    return (
+        bool(lines)
+        and any(_PAGE_LABEL_RE.fullmatch(line) for line in lines)
+        and all(
+            _PAGE_LABEL_RE.fullmatch(line) or line == _MANUAL_TITLE for line in lines
+        )
     )
 
 
 def _is_recurring_footer(text: str) -> bool:
     lines = _classification_lines(text)
-    return bool(lines) and any(line.casefold().startswith("file:///") for line in lines) and all(
-        _ISO_DATE_RE.fullmatch(line)
-        or line.casefold().startswith("file:///")
-        or line.casefold() == "repair4less"
-        for line in lines
+    return (
+        bool(lines)
+        and any(line.casefold().startswith("file:///") for line in lines)
+        and all(
+            _ISO_DATE_RE.fullmatch(line)
+            or line.casefold().startswith("file:///")
+            or line.casefold() == "repair4less"
+            for line in lines
+        )
     )
 
 
@@ -144,7 +151,9 @@ def _is_adjacent_duplicate_heading(previous: TextBlock, current: TextBlock) -> b
     )
 
 
-def _deduplicate_adjacent_headings(blocks: Iterable[TextBlock]) -> tuple[TextBlock, ...]:
+def _deduplicate_adjacent_headings(
+    blocks: Iterable[TextBlock],
+) -> tuple[TextBlock, ...]:
     deduplicated: list[TextBlock] = []
 
     for block in blocks:

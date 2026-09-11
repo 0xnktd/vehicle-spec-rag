@@ -7,7 +7,6 @@ from vehicle_specs.pdf.cleaner import clean_page_record
 from vehicle_specs.pdf.extractor import extract_clean_page, extract_page
 from vehicle_specs.pdf.tables import extract_specification_table_blocks
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SAMPLE_MANUAL = PROJECT_ROOT / "docs" / "sample-service-manual 1.pdf"
 
@@ -93,7 +92,9 @@ def test_cleaner_invariants_hold_across_the_complete_manual() -> None:
                 assert "2014 F-150 Workshop Manual" not in block.text
                 assert "file:///" not in block.text
                 assert "\x84" not in block.text
-                assert not re.search(r"^Page\s+\d+\s+sur\s+\d+$", block.text, re.MULTILINE)
+                assert not re.search(
+                    r"^Page\s+\d+\s+sur\s+\d+$", block.text, re.MULTILINE
+                )
                 assert not re.search(r"^z\s+", block.text, re.MULTILINE)
                 assert not re.search(r"\w-\n\w", block.text)
                 assert not re.search(r"[ \t]+$", block.text, re.MULTILINE)

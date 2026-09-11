@@ -9,13 +9,20 @@ from vehicle_specs.chunking import (
     TextChunk,
     count_tokens,
     iter_chunks,
-    iter_pdf_chunks,
 )
 from vehicle_specs.pdf.cleaner import clean_page_record
-from vehicle_specs.pdf.extractor import extract_clean_page, extract_page
-from vehicle_specs.pdf.models import ContextualPageRecord, PageRecord, SectionContext, TextBlock
-from vehicle_specs.pdf.sections import iter_contextual_pages
-
+from vehicle_specs.pdf.extractor import (
+    extract_clean_page,
+    extract_page,
+    iter_clean_page_records,
+    iter_contextual_pages,
+)
+from vehicle_specs.pdf.models import (
+    ContextualPageRecord,
+    PageRecord,
+    SectionContext,
+    TextBlock,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SAMPLE_MANUAL = PROJECT_ROOT / "docs" / "sample-service-manual 1.pdf"
@@ -128,9 +135,7 @@ def test_chunk_ids_are_readable_and_deterministic_without_a_content_hash() -> No
     second = tuple(iter_chunks(pages, source="Service Manual.pdf"))
 
     assert [chunk.chunk_id for chunk in first] == [chunk.chunk_id for chunk in second]
-    assert first[0].chunk_id == (
-        "service-manual-206-03-a0001-p0001-prose-001"
-    )
+    assert first[0].chunk_id == ("service-manual-206-03-a0001-p0001-prose-001")
 
 
 def test_empty_pages_do_not_create_empty_chunks() -> None:
@@ -157,7 +162,9 @@ def test_front_brake_specification_tables_remain_atomic() -> None:
     assert all(chunk.kind == "table" for chunk in chunks)
     assert all(chunk.pdf_pages == (636,) for chunk in chunks)
 
-    torque_chunk = next(chunk for chunk in chunks if "Torque Specifications" in chunk.text)
+    torque_chunk = next(
+        chunk for chunk in chunks if "Torque Specifications" in chunk.text
+    )
     assert "| Brake caliper anchor plate bolts | 250 | 184 | — |" in torque_chunk.text
     assert "| Brake caliper guide pin bolts | 37 | 27 | — |" in torque_chunk.text
     assert torque_chunk.text.count("Brake caliper guide pin bolts") == 1
@@ -166,7 +173,13 @@ def test_front_brake_specification_tables_remain_atomic() -> None:
 
 def test_complete_manual_chunking_invariants() -> None:
     config = ChunkingConfig()
-    chunks = tuple(iter_pdf_chunks(SAMPLE_MANUAL, config=config))
+    chunks = tuple(
+        iter_chunks(
+            iter_contextual_pages(iter_clean_page_records(SAMPLE_MANUAL)),
+            source=SAMPLE_MANUAL.name,
+            config=config,
+        )
+    )
 
     assert len(chunks) == 637
     assert len({chunk.chunk_id for chunk in chunks}) == len(chunks)
@@ -180,8 +193,6 @@ def test_complete_manual_chunking_invariants() -> None:
     )
 
     represented_articles = {
-        chunk.section.start_pdf_page
-        for chunk in chunks
-        if chunk.section is not None
+        chunk.section.start_pdf_page for chunk in chunks if chunk.section is not None
     }
     assert len(represented_articles) == 177

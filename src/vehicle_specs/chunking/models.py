@@ -6,7 +6,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from vehicle_specs.pdf.models import SectionContext
 
-
 ChunkKind = Literal["prose", "table"]
 
 
