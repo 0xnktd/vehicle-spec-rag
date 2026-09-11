@@ -24,35 +24,50 @@ method.
 PDF ingestion and retrieval run on CPU. The LLM-backed query flow and UI require
 an NVIDIA GPU; the included vLLM configuration is tuned for an 8 GB RTX 4060.
 
-### 1. Install the project
+### Start everything
 
-Run from the repository root:
+Place the supplied PDF at `docs/sample-service-manual 1.pdf`. Optionally copy
+`.env.example` to `.env` to override the defaults.
+
+Verify Docker GPU access once:
 
 ```bash
-mkdir -p artifacts
-test -f .env || cp .env.example .env
-uv sync --frozen --all-groups
+docker run --rm --gpus all \
+  nvidia/cuda:13.0.1-base-ubuntu24.04 nvidia-smi
 ```
 
-If `.env` already exists, do not overwrite it. The default configuration works
-with the supplied manual and stores generated files under `artifacts/`.
-
-### 2. Extract and index the PDF
+Then start the complete application from the repository root:
 
 ```bash
+docker compose up --build --wait
+```
+
+This one command builds the application image, creates or reuses the PDF index,
+starts vLLM, and waits until the UI is healthy. The first run takes longer because
+it downloads the embedding and LLM models and indexes the manual.
+
+Open [http://localhost:8501](http://localhost:8501) after the command returns.
+Use the following commands for logs and shutdown:
+
+```bash
+docker compose logs -f
+docker compose down
+```
+
+Generated files remain under `artifacts/`, while model weights remain in Docker
+volumes. Both are reused on the next start.
+
+### Local CLI workflow
+
+Install the locked Python environment and build the index:
+
+```bash
+uv sync --frozen --all-groups
 uv run vehicle-specs ingest
 uv run vehicle-specs index-status
 ```
 
-The first run downloads the local embedding models and creates cleaned-page,
-quality-report, chunk, and Qdrant index artifacts. To intentionally replace an
-existing index, run:
-
-```bash
-uv run vehicle-specs ingest --rebuild
-```
-
-### 3. Test retrieval without an LLM
+Retrieval does not require vLLM:
 
 ```bash
 uv run vehicle-specs retrieve \
@@ -60,27 +75,7 @@ uv run vehicle-specs retrieve \
   --context-k 3
 ```
 
-Use `--rerank` to apply the local cross-encoder. Run
-`uv run vehicle-specs retrieve --help` for filtering and retrieval-mode options.
-
-### 4. Start vLLM and query the full pipeline
-
-First verify that Docker can access the GPU:
-
-```bash
-docker run --rm --gpus all \
-  nvidia/cuda:13.0.1-base-ubuntu24.04 nvidia-smi
-```
-
-Start the OpenAI-compatible model server:
-
-```bash
-docker compose up -d vllm
-docker compose logs -f vllm
-```
-
-The initial startup downloads the vLLM image and model. Wait until the service is
-healthy, then stop following the logs with `Ctrl+C` and run:
+With the Compose application running, query the full pipeline from the host:
 
 ```bash
 uv run vehicle-specs query \
@@ -89,36 +84,9 @@ uv run vehicle-specs query \
   --output human
 ```
 
-JSON is the default output. Add `--debug` to include retrieved chunks and ranking
-scores.
-
-### 5. Start the UI
-
-```bash
-docker compose up -d --build ui
-```
-
-Open [http://localhost:8501](http://localhost:8501). Stop all services with:
-
-```bash
-docker compose down
-```
-
-Model caches and the generated `artifacts/` directory are preserved.
-
-### Optional: run the CLI in Docker
-
-```bash
-docker compose --profile cli build app
-docker compose --profile cli run --rm app ingest
-docker compose --profile cli run --rm app index-status
-docker compose --profile cli run --rm app query \
-  "Torque for front brake caliper guide pin bolts" \
-  --rerank
-```
-
-Start `vllm` before the containerized `query` command. If the host user is not
-UID/GID `1000:1000`, set `LOCAL_UID` and `LOCAL_GID` in `.env`.
+Use `docker compose --profile cli run --rm app <command>` to run the same CLI in
+Docker. If the host user is not UID/GID `1000:1000`, set `LOCAL_UID` and
+`LOCAL_GID` in `.env`.
 
 ### Run the checks
 

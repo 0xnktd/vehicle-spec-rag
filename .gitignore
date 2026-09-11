@@ -13,7 +13,8 @@ wheels/
 !.env.example
 
 # Generated retrieval artifacts and model caches
-artifacts/
+artifacts/*
+!artifacts/.gitkeep
 .tools/
 *.ses
 

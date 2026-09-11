@@ -1,5 +1,20 @@
 name: vehicle-specs
 
+x-app-service: &app-service
+  image: vehicle-specs-app:local
+  build:
+    context: .
+  init: true
+  user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+  environment:
+    VEHICLE_SPECS_LLM_MODEL: ${VLLM_MODEL:-RedHatAI/Qwen3.5-4B-quantized.w4a16}
+    VEHICLE_SPECS_LLM_BASE_URL: http://vllm:8000/v1
+    VEHICLE_SPECS_LLM_API_KEY: ${VLLM_API_KEY:-local-vllm}
+    VEHICLE_SPECS_MODEL_CACHE_PATH: /app/artifacts/models
+  volumes:
+    - ./docs:/app/docs:ro
+    - ./artifacts:/app/artifacts
+
 services:
   vllm:
     image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.29.0}
@@ -57,40 +72,29 @@ services:
         max-size: 10m
         max-file: "3"
 
+  indexer:
+    <<: *app-service
+    entrypoint: [/bin/sh, -c]
+    command:
+      - >-
+        vehicle-specs index-status >/dev/null 2>&1 ||
+        exec vehicle-specs ingest --rebuild
+    restart: "no"
+
   app:
+    <<: *app-service
     profiles: [cli]
-    build:
-      context: .
-    init: true
-    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
-    environment:
-      VEHICLE_SPECS_LLM_MODEL: ${VLLM_MODEL:-RedHatAI/Qwen3.5-4B-quantized.w4a16}
-      VEHICLE_SPECS_LLM_BASE_URL: http://vllm:8000/v1
-      VEHICLE_SPECS_LLM_API_KEY: ${VLLM_API_KEY:-local-vllm}
-      VEHICLE_SPECS_MODEL_CACHE_PATH: /app/artifacts/models
-    volumes:
-      - ./docs:/app/docs:ro
-      - ./artifacts:/app/artifacts
     command: [--help]
 
   ui:
-    build:
-      context: .
-    init: true
-    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    <<: *app-service
     depends_on:
+      indexer:
+        condition: service_completed_successfully
       vllm:
         condition: service_healthy
     ports:
       - "127.0.0.1:${UI_PORT:-8501}:8501"
-    environment:
-      VEHICLE_SPECS_LLM_MODEL: ${VLLM_MODEL:-RedHatAI/Qwen3.5-4B-quantized.w4a16}
-      VEHICLE_SPECS_LLM_BASE_URL: http://vllm:8000/v1
-      VEHICLE_SPECS_LLM_API_KEY: ${VLLM_API_KEY:-local-vllm}
-      VEHICLE_SPECS_MODEL_CACHE_PATH: /app/artifacts/models
-    volumes:
-      - ./docs:/app/docs:ro
-      - ./artifacts:/app/artifacts
     entrypoint: [streamlit, run]
     command:
       - /app/streamlit_app.py
